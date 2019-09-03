@@ -1,29 +1,49 @@
 ## Netlify Lambda
 
-This is an optional tool that helps with building or locally developing [Netlify Functions](https://www.netlify.com/docs/functions/) with a simple webpack/babel build step.
+This is an optional tool that helps with building or locally developing [Netlify Functions](https://www.netlify.com/docs/functions/) with a simple webpack/babel build step. For function folders, there is also a small utility to install function folder dependencies.
 
 The goal is to make it easy to write Lambda's with transpiled JS/TypeScript features and imported modules.
 
-## New Alternative to Netlify Lambda
+<details>
+  <summary><b>Multiple ways to deploy functions on Netlify</b></summary>
 
-Netlify-Lambda uses webpack to bundle up your functions and their dependencies for you, however this is not the only approach. If you have native node modules (or other dependencies that don't expect to be bundled like [the Firebase SDK](https://github.com/netlify/netlify-lambda/issues/112)) then you may want to try the zipping approach.
+There are 3 ways to deploy functions to Netlify:
 
-We have recently integrated this functionality ([zip-it-and-ship-it](https://github.com/netlify/zip-it-and-ship-it)) into the Netlify CLI. Check the [documentation here](https://www.netlify.com/docs/cli/#unbundled-javascript-function-deploys) in the official CLI docs and support is available through [our regular channels](https://www.netlify.com/support/). The current drawback of this approach is no ability to serve these zipped functions locally, although we are working on this.
+1. each function as a single JS or Go file, possibly bundled by a build tool like `netlify-lambda` or `tsc`
+2. each function as a zip of a folder of files
+3. as of [CLI v2.7](https://www.netlify.com/docs/cli/#unbundled-javascript-function-deploys), a non-bundled, non-zipped, folder of files.
+
+`Netlify-Lambda` uses webpack to bundle up your functions and their dependencies for you, suiting the first approach. However, if you have native node modules (or other dependencies that don't expect to be bundled like [the Firebase SDK](https://github.com/netlify/netlify-lambda/issues/112)) then you may want to try the other approaches. In particular, try [`Netlify Dev`](https://github.com/netlify/netlify-dev-plugin#what-is-netlify-dev).
+
+If this sounds confusing, support is available through [our regular channels](https://www.netlify.com/support/).
+
+</details>
 
 <details>
-  <summary><b>A bit information on manual zipping</b></summary>
+  <summary>
   
- You can still zip up and deploy functions by yourself, as has always been the case with Netlify Functions. Read [here](https://www.netlify.com/blog/2018/09/14/forms-and-functions/) and [here for instructions](https://github.com/DavidWells/function-zips/) (more examples [here](https://github.com/netlify/function-bundling-example))
-  </details>
+  **When to use Netlify Dev or `netlify-lambda` or both?**
   
-Look out for more announcements on this in coming months.
+  </summary>
+
+[`Netlify Dev`](https://github.com/netlify/netlify-dev-plugin#what-is-netlify-dev) is incrementally adoptable. **Use `netlify-lambda` only if you need a build step for your functions**, as explained here:
+
+- **When to use Netlify Dev**: Part of Netlify Dev serves unbundled function folders through [zip-it-and-ship-it](https://github.com/netlify/zip-it-and-ship-it) with no build step. This is likely to be attractive to many users who previously just needed `netlify-lambda` for bundling multi-file functions or functions with node_module dependencies.
+- **When to use Netlify Lambda**: However, if you need a build step for your functions (e.g. for webpack import/export syntax, running babel transforms or typescript), you can use `netlify-lambda`, `tsc` or your own build tool to do this, just point Netlify Dev at your build output with the `functions` field in `netlify.toml`.
+- These responsibilities aren't exactly the same. Therefore **you can use Netlify Dev and Netlify Lambda together** to have BOTH a build step for functions from `netlify-lambda` and the full proxy environment from Netlify Dev. If you have a npm script in `package.json` for running `netlify-lambda serve ${functionsSourceFolder}`, Netlify Dev will [detect it](https://github.com/netlify/netlify-dev-plugin#function-builders-function-builder-detection-and-relationship-with-netlify-lambda) and run it for you. This way, **existing `netlify-lambda` users will be able to use Netlify Dev with no change to their workflow**
+
+Function Builder detection is a very new feature with only simple detection logic for now, that we aim to improve over time. If it doesn't work well for you, you can simply not use Netlify Dev for now while we work out all your bug reports. 🙏🏼
+
+**You can see how to convert a Netlify-Lambda project to Netlify Dev as well as why and how they work together in [this 48 min video here](https://www.youtube.com/watch?v=sakKOT6nkkE)**
+
+</details>
 
 ## Installation
 
 **We recommend installing locally** rather than globally:
 
 ```bash
-yarn add -D netlify-lambda
+yarn add netlify-lambda
 ```
 
 This will ensure your build scripts don't assume a global install which is better for your CI/CD (for example with Netlify's buildbot).
@@ -40,12 +60,43 @@ If you don't have a [`netlify.toml`](https://www.netlify.com/docs/netlify-toml-r
 
 ## Usage
 
-We expose two commands:
+We expose three commands:
 
-```
+```bash
 netlify-lambda serve <folder>
 netlify-lambda build <folder>
+netlify-lambda install [folder]
 ```
+
+### `netlify-lambda install`
+
+Sometimes your function folders will have dependencies unique to them, managed by a package.json local to that folder. This is a small utility function for installing those dependencies either on your local machine or as part of your build commands.
+
+By default it just runs on the functions folder specified in `netlify.toml`. Here's all you need to add to your `package.json` (see [this example](https://github.com/sw-yx/gatsby-netlify-form-example-v2/commit/f88462a4c37b5ddcdf5f394606ac14b58d6b475d#diff-b9cfc7f2cdf78a7f4b91a753d10865a2)):
+
+```js
+// package.json
+{
+   "dependencies": { // you probably don't want it in devDependencies! This is a common gotcha https://www.netlify.com/docs/build-gotchas/#devdependencies
+       "netlify-lambda": "^1.6.0"
+   },
+   "scripts": {
+       "postinstall": "netlify-lambda install"
+   },
+}
+```
+
+This is what you should do if you are just using Netlify Dev without `netlify-lambda`.
+
+If you're using `netlify-lambda serve` or `build`, however, you will want to run this install on the _source_ folder rather than the _dist_/netlify.toml functions folder, so you should run it with the same exact folder name as with those other commands:
+
+```bash
+netlify-lambda install <folderName>
+```
+
+We don't anticipate you will use this as often but it can be handy.
+
+### `netlify-lambda serve` and `netlify-lambda build`
 
 At a high level, `netlify-lambda` takes a source folder (e.g. `src/lambda`, specified in your command) and outputs it to a built folder, (e.g. `built-lambda`, specified in your `netlify.toml` file).
 
@@ -146,12 +197,12 @@ Say you are running `webpack-serve` on port 8080 and `netlify-lambda serve` on p
 
 ```js
 module.exports = {
-  mode: 'development',
+  mode: "development",
   devServer: {
     proxy: {
-      '/.netlify': {
-        target: 'http://localhost:9000',
-        pathRewrite: { '^/.netlify/functions': '' }
+      "/.netlify": {
+        target: "http://localhost:9000",
+        pathRewrite: { "^/.netlify/functions": "" }
       }
     }
   }
@@ -168,7 +219,7 @@ CORS issues when trying to use netlify-lambdas locally with angular? you need to
 Firstly make sure you are using relative paths in your app to ensure that your app will work locally and on Netlify, example below...
 
 ```js
-this.http.get('/.netlify/functions/jokeTypescript');
+this.http.get("/.netlify/functions/jokeTypescript");
 ```
 
 Then place a `proxy.config.json` file in the root of your project, the contents should look something like...
@@ -222,21 +273,21 @@ yarn add -D http-proxy-middleware express
 ```js
 // server.js
 /* eslint-disable no-console */
-const express = require('express');
-const next = require('next');
+const express = require("express");
+const next = require("next");
 
 const devProxy = {
-  '/.netlify': {
-    target: 'http://localhost:9000',
-    pathRewrite: { '^/.netlify/functions': '' }
+  "/.netlify": {
+    target: "http://localhost:9000",
+    pathRewrite: { "^/.netlify/functions": "" }
   }
 };
 
 const port = parseInt(process.env.PORT, 10) || 3000;
 const env = process.env.NODE_ENV;
-const dev = env !== 'production';
+const dev = env !== "production";
 const app = next({
-  dir: '.', // base directory where everything is, could move to src later
+  dir: ".", // base directory where everything is, could move to src later
   dev
 });
 
@@ -250,14 +301,14 @@ app
 
     // Set up the proxy.
     if (dev && devProxy) {
-      const proxyMiddleware = require('http-proxy-middleware');
+      const proxyMiddleware = require("http-proxy-middleware");
       Object.keys(devProxy).forEach(function(context) {
         server.use(proxyMiddleware(context, devProxy[context]));
       });
     }
 
     // Default catch-all handler to allow Next.js to handle all other routes
-    server.all('*', (req, res) => handle(req, res));
+    server.all("*", (req, res) => handle(req, res));
 
     server.listen(port, err => {
       if (err) {
@@ -267,10 +318,9 @@ app
     });
   })
   .catch(err => {
-    console.log('An error occurred, unable to start the server');
+    console.log("An error occurred, unable to start the server");
     console.log(err);
   });
-
 ```
 
 run your server and netlify-lambda at the same time:
@@ -312,6 +362,17 @@ module.exports = {
 
 Then specify `netlify-lambda serve --config ./webpack.functions.js`. If using VSCode, it is likely that the `sourceMapPathOverrides` have to be adapted for breakpoints to work. Read here for more info on [how to modify the webpack config](https://github.com/netlify/netlify-lambda/issues/64#issuecomment-429625191).
 
+If you're using firebase SDK and other native modules, check [this issue](https://github.com/netlify/netlify-lambda/issues/112#issuecomment-489072330) and use this plugin:
+
+```
+//./config/webpack.functions.js
+const nodeExternals = require('webpack-node-externals');
+
+module.exports = {
+  externals: [nodeExternals()],
+};
+```
+
 The additional webpack config will be merged into the default config via [webpack-merge's](https://www.npmjs.com/package/webpack-merge) `merge.smart` method.
 
 ### Babel configuration
@@ -319,6 +380,8 @@ The additional webpack config will be merged into the default config via [webpac
 The default webpack configuration uses `babel-loader` with a [few basic settings](https://github.com/netlify/netlify-lambda/blob/master/lib/build.js#L19-L33).
 
 However, if any `.babelrc` is found in the directory `netlify-lambda` is run from, or [folders above it](https://github.com/netlify/netlify-lambda/pull/92) (useful for monorepos), it will be used instead of the default one.
+
+It is possible to disable this behaviour by passing `--babelrc false`.
 
 If you need to run different babel versions for your lambda and for your app, [check this issue](https://github.com/netlify/netlify-lambda/issues/34) to override your webpack babel-loader.
 
@@ -364,6 +427,7 @@ There are additional CLI options:
 -p --port
 -s --static
 -t --timeout
+-b --babelrc
 ```
 
 ### --config option
@@ -393,6 +457,12 @@ The serving port can be changed with the `-p`/`--port` option.
 
 If you need an escape hatch and are building your lambda in some way that is incompatible with our build process, you can skip the build with the `-s` or `--static` flag. [More info here](https://github.com/netlify/netlify-lambda/pull/62).
 
+### --babelrc
+
+Defaults to `true`
+
+Use a `.babelrc` found in the directory `netlify-lambda` is run from. This can be useful when you have conflicting babel-presets, more info [here](#babel-configuration)
+
 ## Netlify Identity
 
 Make sure to [read the docs](https://www.netlify.com/docs/functions/#identity-and-functions) on how Netlify Functions and Netlify Identity work together. Basically you have to make your request with an `authorization` header and a `Bearer` token with your Netlify Identity JWT supplied. You can get this JWT from any of our Identity solutions from [gotrue-js](https://github.com/netlify/gotrue-js) to [netlify-identity-widget](https://github.com/netlify/netlify-identity-widget).
@@ -403,12 +473,12 @@ Minor note: For the `identity` field, since we are not fully emulating Netlify I
 
 ## Debugging
 
-To debug lambdas, you can use the `--inspect` flag. Additionally:
+To debug lambdas, it can be helpful to turn off minification and enable logging. Prepend the `serve` command with [npm's package runner npx](https://medium.com/@maybekatz/introducing-npx-an-npm-package-runner-55f7d4bd282b), e.g. `npx --node-arg=--inspect netlify-lambda serve ...`.
 
 1. make sure that sourcemaps are built along the way (e.g. in the webpack configuration and the `tsconfig.json` if typescript is used)
 2. webpack's minification/uglification is turned off (see below):
 
-For example, have a file with:
+For example, to customize the webpack config you can have a file with:
 
 ```js
 // webpack.functions.js
@@ -417,14 +487,16 @@ module.exports = {
 };
 ```
 
-Then specify `netlify-lambda serve --config ./webpack.functions.js`. If using VSCode, it is likely that the `sourceMapPathOverrides` have to be adapted for breakpoints to work. Read here for more info on [how to modify the webpack config](https://github.com/netlify/netlify-lambda/issues/64#issuecomment-429625191).
+You can see [a sample project with this setup here](https://github.com/sw-yx/throwaway-test-netlify-lambda).
+
+So you can run something like `npx --node-arg=--inspect netlify-lambda serve --config ./webpack.functions.js`. If using VSCode, it is likely that the `sourceMapPathOverrides` have to be adapted for breakpoints to work. Read here for more info on [how to modify the webpack config](https://github.com/netlify/netlify-lambda/issues/64#issuecomment-429625191).
 
 Netlify Functions [run in Node v8.10](https://www.netlify.com/blog/2018/04/03/node.js-8.10-now-available-in-netlify-functions/) and you may need to run the same version to mirror the environment locally. Also make sure to check that you aren't [committing one of these common Node 8 mistakes in Lambda!](https://serverless.com/blog/common-node8-mistakes-in-lambda/)
 
 **Special warning on `node-fetch`**: `node-fetch` and webpack [currently don't work well together](https://github.com/bitinn/node-fetch/issues/450). You will have to use the default export in your code:
 
 ```js
-const fetch = require('node-fetch').default // not require('node-fetch')
+const fetch = require("node-fetch").default; // not require('node-fetch')
 ```
 
 Don't forget to search our issues in case someone has run into a similar problem you have!
